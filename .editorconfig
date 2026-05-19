@@ -1,0 +1,17 @@
+# See https://editorconfig.org for more about editor config.
+
+# top-most EditorConfig file
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_size = 4
+indent_style = space
+insert_final_newline = true
+max_line_length = 120
+trim_trailing_whitespace = true
+
+[*.json]
+indent_size = 2
+max_line_length = 80
