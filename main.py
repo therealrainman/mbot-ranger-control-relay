@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-mBot Ranger — BLE simple demo
-Forward at 20% for 2s, pause 5s, backward at 20% for 2s.
-Prints all BLE characteristics and every byte packet sent.
+mBot Ranger — BLE simple demo with response notifications
+Forward at 50% for 2s, pause 5s, backward at 50% for 2s.
+Subscribes to the notify characteristic and prints all incoming bytes.
 """
 
 import asyncio
@@ -10,11 +10,12 @@ from bleak import BleakScanner, BleakClient
 
 MBOT_NAME_KEYWORDS = ["makeblock", "mbot", "ranger"]
 SCAN_TIMEOUT       = 10   # seconds
-SPEED_20           = int(255 * 0.50)   # 51 out of 255
+SPEED_50           = int(255 * 0.50)
 
 # Known Makeblock BLE characteristic UUID for sending commands
 # (we will discover and print all of them regardless)
-WRITE_CHARACTERISTIC_UUID = "0000ffe3-0000-1000-8000-00805f9b34fb"
+WRITE_UUID  = "0000ffe3-0000-1000-8000-00805f9b34fb"
+NOTIFY_UUID = "0000ffe2-0000-1000-8000-00805f9b34fb"
 
 
 # ── Protocol helpers ──────────────────────────────────────────────────────────
@@ -46,6 +47,12 @@ def fmt(data: bytes) -> str:
     return data.hex(' ').upper()
 
 
+# ── Notification handler ──────────────────────────────────────────────────────
+
+def on_notify(characteristic, data: bytearray):
+    print(f"  📨 Received: {fmt(bytes(data))}")
+
+
 # ── BLE helpers ───────────────────────────────────────────────────────────────
 
 async def find_mbot():
@@ -70,9 +77,17 @@ async def print_characteristics(client: BleakClient):
 
 async def send(client: BleakClient, packet: bytes, label: str):
     print(f"{label}")
-    print(f"  Bytes:  {fmt(packet)}")
-    await client.write_gatt_char(WRITE_CHARACTERISTIC_UUID, packet, response=False)
+    print(f"  Bytes: {fmt(packet)}")
+    await client.write_gatt_char(WRITE_UUID, packet, response=False)
     print(f"  ✅ Sent\n")
+
+
+async def send_stop(client: BleakClient):
+    """Send stop twice with a short gap, then wait for BLE to flush."""
+    await send(client, stop_packet(), "⏹  Stopping...")
+    await asyncio.sleep(0.1)
+    await send(client, stop_packet(), "⏹  Stop (repeat)...")
+    await asyncio.sleep(0.5)
 
 
 # ── Demo ──────────────────────────────────────────────────────────────────────
@@ -80,30 +95,38 @@ async def send(client: BleakClient, packet: bytes, label: str):
 async def run_demo(client: BleakClient):
     await print_characteristics(client)
 
+    # Subscribe to notifications
+    print("Subscribing to notifications...")
+    await client.start_notify(NOTIFY_UUID, on_notify)
+    print("✅ Subscribed — incoming bytes will be printed as they arrive\n")
+
     # Forward
-    await send(client, motor_packet(SPEED_20, SPEED_20),
-               f"▶  Forward at 20% ({SPEED_20}/255) for 2 seconds...")
+    await send(client, motor_packet(SPEED_50, SPEED_50),
+               f"▶  Forward at 50% ({SPEED_50}/255) for 2 seconds...")
     await asyncio.sleep(2.0)
 
     # Stop
-    await send(client, stop_packet(), "⏸  Stopping...")
+    await send_stop(client)
     print("   Pausing for 5 seconds...\n")
     await asyncio.sleep(5.0)
 
     # Backward
-    await send(client, motor_packet(-SPEED_20, -SPEED_20),
-               f"◀  Backward at 20% ({SPEED_20}/255) for 2 seconds...")
+    await send(client, motor_packet(-SPEED_50, -SPEED_50),
+               f"◀  Backward at 50% ({SPEED_50}/255) for 2 seconds...")
     await asyncio.sleep(2.0)
 
     # Stop
-    await send(client, stop_packet(), "⏹  Stopping...")
+    await send_stop(client)
+
+    # Unsubscribe cleanly
+    await client.stop_notify(NOTIFY_UUID)
     print("✅ Demo complete!")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 async def main():
-    print("=== mBot Ranger — BLE Simple Demo ===\n")
+    print("=== mBot Ranger — BLE Demo with response notifications ===\n")
 
     device = await find_mbot()
     if device is None:
