@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class MotorSpeed:
-    raw: int  # [-255, 255] — the single source of truth
+    raw: int  # Raw motor speed in the range [-255, 255]
 
     def __post_init__(self):
         if not -255 <= self.raw <= 255:
