@@ -37,30 +37,32 @@ async def run_demo(ranger: MbotRanger):
     print("✅ Subscribed — incoming bytes will be printed as they arrive\n")
 
     # Forward
-    print(f"▶  Forward at 50% for 2 seconds...")
+    print(f"\nForward at 50% for 2 seconds...")
     ranger.set_motor_speeds_percent(left=-50, right=50)
     await ranger.send_to_relay()
     await asyncio.sleep(2.0)
 
     # Stop
+    print("\nPausing for 5 seconds...")
     ranger.set_motor_speeds_percent(left=0, right=0)
     await ranger.send_to_relay()
-    print("   Pausing for 5 seconds...\n")
     await asyncio.sleep(5.0)
 
     # Backward
-    print(f"◀  Backward at 50% for 2 seconds...")
+    print(f"\nBackward at 50% for 2 seconds...")
     ranger.set_motor_speeds_percent(left=50, right=-50)
     await ranger.send_to_relay()
     await asyncio.sleep(2.0)
 
     # Final stop
+    print("\nFinal stop!")
     ranger.set_motor_speeds_percent(left=0, right=0)
     await ranger.send_to_relay()
+    await asyncio.sleep(0.5)
 
     # Unsubscribe cleanly
     await ranger.stop_notify()
-    print("✅ Demo complete!")
+    print("\n✅ Demo complete!")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

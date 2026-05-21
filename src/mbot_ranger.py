@@ -29,6 +29,7 @@ class MbotRanger:
     async def send_to_relay(self):
         if self.relay_client and self.relay_client.is_connected:
             payload = PACKET_HEADER + PACKET_PREFIX + self.left_motor_speed.get_bytes() + self.right_motor_speed.get_bytes()
+            print(f"    Sending: {payload.hex(' ').upper()}")
             await self.relay_client.write_gatt_char(BLE_WRITE_UUID, payload, response=False)
         else:
             print(f"Relay client not connected for {self}")
@@ -55,4 +56,4 @@ class MbotRanger:
 
     @staticmethod
     def on_notify(characteristic, data: bytearray):
-        print(f"  📨 Received: {data.hex(' ').upper()}")
+        print(f"    Received: {data.hex(' ').upper()}")
