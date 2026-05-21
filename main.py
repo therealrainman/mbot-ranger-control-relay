@@ -8,6 +8,8 @@ Subscribes to the notify characteristic and prints all incoming bytes.
 import asyncio
 from bleak import BleakScanner, BleakClient
 
+from src.protocol import Packet
+
 MBOT_NAME_KEYWORDS = ["makeblock", "mbot", "ranger"]
 SCAN_TIMEOUT       = 10   # seconds
 SPEED_50           = int(255 * 0.50)
@@ -18,39 +20,10 @@ WRITE_UUID  = "0000ffe3-0000-1000-8000-00805f9b34fb"
 NOTIFY_UUID = "0000ffe2-0000-1000-8000-00805f9b34fb"
 
 
-# ── Protocol helpers ──────────────────────────────────────────────────────────
-
-def int16_le(v: int) -> bytes:
-    """Pack a signed integer as a little-endian 16-bit value."""
-    v = max(-255, min(255, v))
-    if v < 0:
-        v = 0x10000 + v
-    return bytes([v & 0xFF, (v >> 8) & 0xFF])
-
-
-def motor_packet(left: int, right: int) -> bytes:
-    """
-    Build a dual-motor drive packet.
-    Positive = forward, negative = backward.
-    Motor 1 (left) is wired in reverse so is negated internally.
-    """
-    payload = bytes([0x07, 0x00, 0x02, 0x05]) + int16_le(-left) + int16_le(right)
-    return bytes([0xFF, 0x55]) + payload
-
-
-def stop_packet() -> bytes:
-    return motor_packet(0, 0)
-
-
-def fmt(data: bytes) -> str:
-    """Format bytes as uppercase hex pairs e.g. FF 55 07 ..."""
-    return data.hex(' ').upper()
-
-
 # ── Notification handler ──────────────────────────────────────────────────────
 
 def on_notify(characteristic, data: bytearray):
-    print(f"  📨 Received: {fmt(bytes(data))}")
+    print(f"  📨 Received: {Packet.fmt(bytes(data))}")
 
 
 # ── BLE helpers ───────────────────────────────────────────────────────────────
@@ -77,16 +50,16 @@ async def print_characteristics(client: BleakClient):
 
 async def send(client: BleakClient, packet: bytes, label: str):
     print(f"{label}")
-    print(f"  Bytes: {fmt(packet)}")
+    print(f"  Bytes: {Packet.fmt(packet)}")
     await client.write_gatt_char(WRITE_UUID, packet, response=False)
     print(f"  ✅ Sent\n")
 
 
 async def send_stop(client: BleakClient):
     """Send stop twice with a short gap, then wait for BLE to flush."""
-    await send(client, stop_packet(), "⏹  Stopping...")
+    await send(client, Packet.stop(), "⏹  Stopping...")
     await asyncio.sleep(0.1)
-    await send(client, stop_packet(), "⏹  Stop (repeat)...")
+    await send(client, Packet.stop(), "⏹  Stop (repeat)...")
     await asyncio.sleep(0.5)
 
 
@@ -101,7 +74,7 @@ async def run_demo(client: BleakClient):
     print("✅ Subscribed — incoming bytes will be printed as they arrive\n")
 
     # Forward
-    await send(client, motor_packet(SPEED_50, SPEED_50),
+    await send(client, Packet.motor(SPEED_50, SPEED_50),
                f"▶  Forward at 50% ({SPEED_50}/255) for 2 seconds...")
     await asyncio.sleep(2.0)
 
@@ -111,7 +84,7 @@ async def run_demo(client: BleakClient):
     await asyncio.sleep(5.0)
 
     # Backward
-    await send(client, motor_packet(-SPEED_50, -SPEED_50),
+    await send(client, Packet.motor(-SPEED_50, -SPEED_50),
                f"◀  Backward at 50% ({SPEED_50}/255) for 2 seconds...")
     await asyncio.sleep(2.0)
 
