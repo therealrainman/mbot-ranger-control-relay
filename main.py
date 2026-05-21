@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 mBot Ranger — BLE simple demo with response notifications
-Forward at 50% for 2s, pause 5s, backward at 50% for 2s.
+Forward at 50% for 2s, pause 2s, backward at 50% for 2s.
 Subscribes to the notify characteristic and prints all incoming bytes.
 """
 import asyncio
@@ -10,6 +10,7 @@ from src.mbot_ranger import MbotRanger
 
 MBOT_NAME_KEYWORDS = ["makeblock", "mbot", "ranger"]
 SCAN_TIMEOUT       = 5   # seconds
+MOTOR_SPEED_PERCENT = 50
 
 
 # ── BLE helpers ───────────────────────────────────────────────────────────────
@@ -38,19 +39,19 @@ async def run_demo(ranger: MbotRanger):
 
     # Forward
     print(f"\nForward at 50% for 2 seconds...")
-    ranger.set_motor_speeds_percent(left=-50, right=50)
+    ranger.set_motor_speeds_percent(left=-MOTOR_SPEED_PERCENT, right=MOTOR_SPEED_PERCENT)
     await ranger.send_to_relay()
     await asyncio.sleep(2.0)
 
     # Stop
-    print("\nPausing for 5 seconds...")
+    print("\nPausing for 2 seconds...")
     ranger.set_motor_speeds_percent(left=0, right=0)
     await ranger.send_to_relay()
-    await asyncio.sleep(5.0)
+    await asyncio.sleep(2.0)
 
     # Backward
     print(f"\nBackward at 50% for 2 seconds...")
-    ranger.set_motor_speeds_percent(left=50, right=-50)
+    ranger.set_motor_speeds_percent(left=MOTOR_SPEED_PERCENT, right=-MOTOR_SPEED_PERCENT)
     await ranger.send_to_relay()
     await asyncio.sleep(2.0)
 
