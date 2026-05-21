@@ -1,0 +1,9 @@
+[project]
+name = "mbot-ranger-control-relay"
+version = "1.0.0"
+description = "Control relay for the Makeblock mBot Ranger"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "bleak"
+]
