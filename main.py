@@ -1,32 +1,16 @@
 #!/usr/bin/env python3
-"""
-mBot Ranger — BLE simple demo with response notifications
-Forward at 50% for 2s, pause 5s, backward at 50% for 2s.
-Subscribes to the notify characteristic and prints all incoming bytes.
-"""
-
 import asyncio
-from bleak import BleakScanner, BleakClient
 
-from src.protocol import Packet
+import pygame
+from bleak import BleakScanner
+
+from src.mbot_ranger import MbotRanger
 
 MBOT_NAME_KEYWORDS = ["makeblock", "mbot", "ranger"]
-SCAN_TIMEOUT       = 10   # seconds
-SPEED_50           = int(255 * 0.50)
+SCAN_TIMEOUT = 5  # seconds
+DEADZONE = 0.1
+REFRESH_RATE = 0.05  # 20Hz update rate
 
-# Known Makeblock BLE characteristic UUID for sending commands
-# (we will discover and print all of them regardless)
-WRITE_UUID  = "0000ffe3-0000-1000-8000-00805f9b34fb"
-NOTIFY_UUID = "0000ffe2-0000-1000-8000-00805f9b34fb"
-
-
-# ── Notification handler ──────────────────────────────────────────────────────
-
-def on_notify(characteristic, data: bytearray):
-    print(f"  📨 Received: {Packet.fmt(bytes(data))}")
-
-
-# ── BLE helpers ───────────────────────────────────────────────────────────────
 
 async def find_mbot():
     print(f"Scanning for mBot Ranger ({SCAN_TIMEOUT}s)...")
@@ -38,82 +22,111 @@ async def find_mbot():
     return None
 
 
-async def print_characteristics(client: BleakClient):
-    print("\n── BLE Services & Characteristics ───────────────────────────")
-    for service in client.services:
-        print(f"\n  Service: {service.uuid}")
-        for char in service.characteristics:
-            props = ", ".join(char.properties)
-            print(f"    Characteristic: {char.uuid}  [{props}]")
-    print("─────────────────────────────────────────────────────────────\n")
+def apply_deadzone(value, deadzone):
+    if abs(value) < deadzone:
+        return 0.0
+    return value
 
 
-async def send(client: BleakClient, packet: bytes, label: str):
-    print(f"{label}")
-    print(f"  Bytes: {Packet.fmt(packet)}")
-    await client.write_gatt_char(WRITE_UUID, packet, response=False)
-    print(f"  ✅ Sent\n")
+async def joystick_loop(ranger: MbotRanger):
+    pygame.init()
+    pygame.joystick.init()
 
+    if pygame.joystick.get_count() == 0:
+        print("❌ No joystick detected. Please connect a controller.")
+        return
 
-async def send_stop(client: BleakClient):
-    """Send stop twice with a short gap, then wait for BLE to flush."""
-    await send(client, Packet.stop(), "⏹  Stopping...")
-    await asyncio.sleep(0.1)
-    await send(client, Packet.stop(), "⏹  Stop (repeat)...")
-    await asyncio.sleep(0.5)
+    joystick = pygame.joystick.Joystick(0)
+    joystick.init()
+    print(f"✅ Joystick detected: {joystick.get_name()}")
 
+    print("\nControl layout:")
+    print(" - Left Stick Y: Forward / Backward")
+    print(" - Left Stick X: Left / Right (Turning)")
+    print(" - Press 'B' button or Ctrl+C to exit")
 
-# ── Demo ──────────────────────────────────────────────────────────────────────
+    try:
+        running = True
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.JOYBUTTONDOWN:
+                    # Exit on button 1 (usually 'B' on Xbox or 'Circle' on PS)
+                    if event.button == 1:
+                        running = False
 
-async def run_demo(client: BleakClient):
-    await print_characteristics(client)
+            # Get axis values
+            # Left stick Y (axis 1) for throttle
+            # Left stick X (axis 0) for steering
+            # Most modern controllers:
+            # Axis 0: Left Stick X
+            # Axis 1: Left Stick Y
+            # Axis 2: Right Stick X (sometimes 3)
+            # Axis 3: Right Stick Y (sometimes 4)
 
-    # Subscribe to notifications
-    print("Subscribing to notifications...")
-    await client.start_notify(NOTIFY_UUID, on_notify)
-    print("✅ Subscribed — incoming bytes will be printed as they arrive\n")
+            throttle = -joystick.get_axis(1)  # Negate because Y is usually inverted
+            steering = joystick.get_axis(0)
 
-    # Forward
-    await send(client, Packet.motor(SPEED_50, SPEED_50),
-               f"▶  Forward at 50% ({SPEED_50}/255) for 2 seconds...")
-    await asyncio.sleep(2.0)
+            throttle = apply_deadzone(throttle, DEADZONE)
+            steering = apply_deadzone(steering, DEADZONE)
 
-    # Stop
-    await send_stop(client)
-    print("   Pausing for 5 seconds...\n")
-    await asyncio.sleep(5.0)
+            # Arcade drive mapping
+            # When driving backwards, invert the steering to make it feel more natural
+            if throttle < 0:
+                left_speed = (throttle + steering) * 100
+                right_speed = (throttle - steering) * 100
+            else:
+                left_speed = (throttle - steering) * 100
+                right_speed = (throttle + steering) * 100
 
-    # Backward
-    await send(client, Packet.motor(-SPEED_50, -SPEED_50),
-               f"◀  Backward at 50% ({SPEED_50}/255) for 2 seconds...")
-    await asyncio.sleep(2.0)
+            # Clamp to [-100, 100]
+            left_speed = max(-100, min(100, left_speed))
+            right_speed = max(-100, min(100, right_speed))
 
-    # Stop
-    await send_stop(client)
+            # Note: mBot Ranger might need inverted signs depending on motor orientation
+            # Based on main.py:
+            # Forward: left=-50, right=50
+            # Backward: left=50, right=-50
+            # So for forward (throttle > 0): left should be negative, right positive.
 
-    # Unsubscribe cleanly
-    await client.stop_notify(NOTIFY_UUID)
-    print("✅ Demo complete!")
+            ranger.set_motor_speeds_percent(left=-left_speed, right=right_speed)
+            await ranger.send_to_relay()
 
+            await asyncio.sleep(REFRESH_RATE)
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+    except asyncio.CancelledError:
+        pass
+    finally:
+        print("\nStopping mBot...")
+        ranger.set_motor_speeds_percent(0, 0)
+        await ranger.send_to_relay()
+        pygame.quit()
+
 
 async def main():
-    print("=== mBot Ranger — BLE Demo with response notifications ===\n")
+    print("=== mBot Ranger Joystick Control ===\n")
 
     device = await find_mbot()
     if device is None:
-        print("❌ mBot Ranger not found. Make sure it is powered on and in range.")
+        print("❌ mBot Ranger not found.")
         return
 
-    print(f"✅ Found:   {device.name}")
-    print(f"   Address: {device.address}")
-    print(f"\nConnecting...")
+    print(f"✅ Found:   {device.name} ({device.address})")
 
-    async with BleakClient(device.address) as client:
-        print(f"✅ Connected! (MTU: {client.mtu_size})\n")
-        await run_demo(client)
+    ranger = MbotRanger(name=str(device.name), address=device.address)
+
+    if ranger.relay_client:
+        print("\nConnecting...")
+        async with ranger.relay_client:
+            print("✅ Connected!\n")
+            await joystick_loop(ranger)
+    else:
+        print("Relay client not initialized!")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
