@@ -1,4 +1,8 @@
+import asyncio
 import sys
+
+import pygame
+
 
 def force_mta():
     """
@@ -21,3 +25,18 @@ def force_mta():
             ole32.CoUninitialize()
         else:
             break
+
+async def wait_for_button_press(
+    button: int, prompt: str, timeout: float = 30.0
+) -> int | None:
+    print(prompt)
+    deadline = asyncio.get_event_loop().time() + timeout
+
+    while asyncio.get_event_loop().time() < deadline:
+        pygame.event.pump()  # ← flush pygame's internal event queue
+        for event in pygame.event.get():
+            if event.type == pygame.JOYBUTTONDOWN and event.button == button:
+                return event.joy
+        await asyncio.sleep(0.05)
+
+    return None

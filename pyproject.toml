@@ -6,7 +6,8 @@ readme = "README.md"
 requires-python = "~=3.13.0"
 dependencies = [
     "bleak",
-    "pygame"
+    "pygame",
+    "rich"
 ]
 
 [dependency-groups]
