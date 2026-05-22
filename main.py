@@ -1,128 +1,194 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import asyncio
 
 import pygame
 from bleak import BleakScanner
+from bleak.backends.device import BLEDevice
 
+from src.gamepad_manager import GamepadManager
 from src.mbot_ranger import MbotRanger
 
-MBOT_NAME_KEYWORDS = ["makeblock", "mbot", "ranger"]
+BUMPERBOTS_NAME_ID_MAP = {
+    "Blue": "Makeblock_LE703e97e38098",
+    # "Red": "Makeblock_LE002",
+    # "Green": "Makeblock_LE003",
+    # "Yellow": "Makeblock_LE004",
+}
+
 SCAN_TIMEOUT = 5  # seconds
-DEADZONE = 0.1
-REFRESH_RATE = 0.05  # 20Hz update rate
 
 
-async def find_mbot():
-    print(f"Scanning for mBot Ranger ({SCAN_TIMEOUT}s)...")
-    devices = await BleakScanner.discover(timeout=SCAN_TIMEOUT)
-    for device in devices:
-        name = (device.name or "").lower()
-        if any(kw in name for kw in MBOT_NAME_KEYWORDS):
-            return device
+# == Discovery ================================================================
+
+
+async def scan_for_devices() -> dict[str, BLEDevice]:
+    """Scan and return a map of device_name → BLEDevice for all found devices."""
+    target_names = set(BUMPERBOTS_NAME_ID_MAP.values())
+    print(f"Scanning for {len(target_names)} device(s) ({SCAN_TIMEOUT}s)...")
+
+    discovered = await BleakScanner.discover(timeout=SCAN_TIMEOUT)
+    found: dict[str, BLEDevice] = {}
+
+    for device in discovered:
+        if device.name in target_names:
+            color = next(
+                color
+                for color, name in BUMPERBOTS_NAME_ID_MAP.items()
+                if name == device.name
+            )
+            found[color] = device
+
+    return found
+
+
+def verify_discovery(found: dict[str, BLEDevice]) -> bool:
+    """Print a discovery report. Returns True if all devices were found."""
+    all_found = True
+    for color, device_name in BUMPERBOTS_NAME_ID_MAP.items():
+        if color in found:
+            print(f"  ✅ {color}: {device_name} ({found[color].address})")
+        else:
+            print(f"  ❌ {color}: {device_name} — not found")
+            all_found = False
+    return all_found
+
+
+def verify_controllers(required: int) -> bool:
+    """Check that enough controllers are connected. Returns True if sufficient."""
+    available = pygame.joystick.get_count()
+    if available >= required:
+        print(f"  ✅ {available} controller(s) detected ({required} required)")
+        return True
+    else:
+        print(
+            f"  ❌ {available} controller(s) detected, but {required} required. "
+            "Please connect more controllers and try again."
+        )
+        return False
+
+
+# == Pairing ==================================================================
+
+
+async def wait_for_button_press(
+    button: int, prompt: str, timeout: float = 30.0
+) -> int | None:
+    print(prompt)
+    deadline = asyncio.get_event_loop().time() + timeout
+
+    while asyncio.get_event_loop().time() < deadline:
+        pygame.event.pump()  # ← flush pygame's internal event queue
+        for event in pygame.event.get():
+            if event.type == pygame.JOYBUTTONDOWN and event.button == button:
+                return event.joy
+        await asyncio.sleep(0.05)
+
     return None
 
 
-def apply_deadzone(value, deadzone):
-    if abs(value) < deadzone:
-        return 0.0
-    return value
+async def pair_controllers(colors: list[str]) -> dict[str, int] | None:
+    """
+    Interactively pair each color robot to a controller.
+    Returns a map of color → joystick_index, or None if pairing failed.
+    """
+    # Initialize all joysticks so they start generating events
+    joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
+    for j in joysticks:
+        j.init()
+
+    pygame.event.clear()  # Clear any stale events before pairing
+
+    pairings: dict[str, int] = {}
+    used_joysticks: set[int] = set()
+
+    for color in colors:
+        while True:
+            joystick_index = await wait_for_button_press(
+                button=0,  # 'A' on Xbox, 'Cross' on PS
+                prompt=f"\n🎮 Press 'A' on the controller for [{color}]...",
+            )
+
+            if joystick_index is None:
+                print(f"  ❌ Timed out waiting for [{color}]. Aborting setup.")
+                return None
+
+            if joystick_index in used_joysticks:
+                print(
+                    f"  ⚠️  Controller {joystick_index} is already paired. "
+                    "Try a different controller."
+                )
+                continue
+
+            used_joysticks.add(joystick_index)
+            pairings[color] = joystick_index
+            print(f"  ✅ Controller {joystick_index} paired to [{color}]")
+            break
+
+    return pairings
 
 
-async def joystick_loop(ranger: MbotRanger):
-    pygame.init()
-    pygame.joystick.init()
-
-    if pygame.joystick.get_count() == 0:
-        print("❌ No joystick detected. Please connect a controller.")
-        return
-
-    joystick = pygame.joystick.Joystick(0)
-    joystick.init()
-    print(f"✅ Joystick detected: {joystick.get_name()}")
-
-    print("\nControl layout:")
-    print(" - Left Stick Y: Forward / Backward")
-    print(" - Left Stick X: Left / Right (Turning)")
-    print(" - Press 'B' button or Ctrl+C to exit")
-
-    try:
-        running = True
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                elif event.type == pygame.JOYBUTTONDOWN:
-                    # Exit on button 1 (usually 'B' on Xbox or 'Circle' on PS)
-                    if event.button == 1:
-                        running = False
-
-            # Get axis values
-            # Left stick Y (axis 1) for throttle
-            # Left stick X (axis 0) for steering
-            # Most modern controllers:
-            # Axis 0: Left Stick X
-            # Axis 1: Left Stick Y
-            # Axis 2: Right Stick X (sometimes 3)
-            # Axis 3: Right Stick Y (sometimes 4)
-
-            throttle = -joystick.get_axis(1)  # Negate because Y is usually inverted
-            steering = joystick.get_axis(0)
-
-            throttle = apply_deadzone(throttle, DEADZONE)
-            steering = apply_deadzone(steering, DEADZONE)
-
-            # Arcade drive mapping
-            # When driving backwards, invert the steering to make it feel more natural
-            if throttle < 0:
-                left_speed = (throttle + steering) * 100
-                right_speed = (throttle - steering) * 100
-            else:
-                left_speed = (throttle - steering) * 100
-                right_speed = (throttle + steering) * 100
-
-            # Clamp to [-100, 100]
-            left_speed = max(-100, min(100, left_speed))
-            right_speed = max(-100, min(100, right_speed))
-
-            # Note: mBot Ranger might need inverted signs depending on motor orientation
-            # Based on main.py:
-            # Forward: left=-50, right=50
-            # Backward: left=50, right=-50
-            # So for forward (throttle > 0): left should be negative, right positive.
-
-            ranger.set_motor_speeds_percent(left=-left_speed, right=right_speed)
-            await ranger.send_to_relay()
-
-            await asyncio.sleep(REFRESH_RATE)
-
-    except asyncio.CancelledError:
-        pass
-    finally:
-        print("\nStopping mBot...")
-        ranger.set_motor_speeds_percent(0, 0)
-        await ranger.send_to_relay()
-        pygame.quit()
+# == Main =====================================================================
 
 
 async def main():
-    print("=== mBot Ranger Joystick Control ===\n")
+    print("=== Bumperbots Multi-Robot Controller ===\n")
 
-    device = await find_mbot()
-    if device is None:
-        print("❌ mBot Ranger not found.")
+    pygame.init()
+    pygame.joystick.init()
+
+    # 1. Scan for all robots
+    print("[ Step 1 / 3 ] Scanning for robots...")
+    found_devices = await scan_for_devices()
+    if not verify_discovery(found_devices):
+        print("\n❌ Not all robots were found. Please check they are powered on.")
+        pygame.quit()
         return
 
-    print(f"✅ Found:   {device.name} ({device.address})")
+    colors = list(found_devices.keys())
 
-    ranger = MbotRanger(name=str(device.name), address=device.address)
+    # 2. Verify enough controllers
+    print("\n[ Step 2 / 3 ] Checking controllers...")
+    if not verify_controllers(required=len(colors)):
+        pygame.quit()
+        return
 
-    if ranger.relay_client:
-        print("\nConnecting...")
-        async with ranger.relay_client:
-            print("✅ Connected!\n")
-            await joystick_loop(ranger)
-    else:
-        print("Relay client not initialized!")
+    # 3. Interactive pairing
+    print("\n[ Step 3 / 3 ] Pairing controllers to robots...")
+    pairings = await pair_controllers(colors)
+    if pairings is None:
+        pygame.quit()
+        return
+
+    # Build GamepadManagers
+    managers = [
+        GamepadManager(
+            ranger=MbotRanger(
+                name=color,
+                address=found_devices[color].address,
+            )
+        )
+        for color in colors
+    ]
+
+    for manager in managers:
+        manager.connect(pairings[manager.ranger.name])
+
+    # 4. Connect all BLE clients and run concurrently
+    print("\n✅ All paired! Connecting to robots...\n")
+
+    async def run_one(gamepad_manager_instance: GamepadManager):
+        async with gamepad_manager_instance.ranger.relay_client:
+            print(f"✅ [{gamepad_manager_instance.ranger.name}] Connected!")
+            await gamepad_manager_instance.run()
+
+    async with asyncio.TaskGroup() as tg:
+        for manager in managers:
+            tg.create_task(run_one(manager))
+
+    print("\n✅ All done. Goodbye!")
+    pygame.quit()
 
 
 if __name__ == "__main__":
