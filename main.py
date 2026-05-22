@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
-"""
-mBot Ranger — BLE simple demo with response notifications
-Forward at 50% for 2s, pause 2s, backward at 50% for 2s.
-Subscribes to the notify characteristic and prints all incoming bytes.
-"""
 import asyncio
+import pygame
 from bleak import BleakScanner
 from src.mbot_ranger import MbotRanger
 
 MBOT_NAME_KEYWORDS = ["makeblock", "mbot", "ranger"]
-SCAN_TIMEOUT       = 5   # seconds
-MOTOR_SPEED_PERCENT = 50
-
-
-# ── BLE helpers ───────────────────────────────────────────────────────────────
+SCAN_TIMEOUT = 5  # seconds
+DEADZONE = 0.1
+REFRESH_RATE = 0.05  # 20Hz update rate
 
 async def find_mbot():
     print(f"Scanning for mBot Ranger ({SCAN_TIMEOUT}s)...")
@@ -24,73 +18,106 @@ async def find_mbot():
             return device
     return None
 
-# ── Demo ──────────────────────────────────────────────────────────────────────
+def apply_deadzone(value, deadzone):
+    if abs(value) < deadzone:
+        return 0.0
+    return value
 
-async def run_demo(ranger: MbotRanger):
-    if ranger.relay_client is None:
-        print("❌ Relay client is not initialized.")
+async def joystick_loop(ranger: MbotRanger):
+    pygame.init()
+    pygame.joystick.init()
+
+    if pygame.joystick.get_count() == 0:
+        print("❌ No joystick detected. Please connect a controller.")
         return
-    await ranger.print_characteristics()
 
-    # Subscribe to notifications
-    print("Subscribing to notifications...")
-    await ranger.start_notify()
-    print("✅ Subscribed — incoming bytes will be printed as they arrive\n")
+    joystick = pygame.joystick.Joystick(0)
+    joystick.init()
+    print(f"✅ Joystick detected: {joystick.get_name()}")
 
-    # Forward
-    print(f"\nForward at 50% for 2 seconds...")
-    ranger.set_motor_speeds_percent(left=-MOTOR_SPEED_PERCENT, right=MOTOR_SPEED_PERCENT)
-    await ranger.send_to_relay()
-    await asyncio.sleep(2.0)
+    print("\nControl layout:")
+    print(" - Left Stick Y: Forward / Backward")
+    print(" - Left Stick X: Left / Right (Turning)")
+    print(" - Press 'B' button or Ctrl+C to exit")
 
-    # Stop
-    print("\nPausing for 2 seconds...")
-    ranger.set_motor_speeds_percent(left=0, right=0)
-    await ranger.send_to_relay()
-    await asyncio.sleep(2.0)
+    try:
+        running = True
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.JOYBUTTONDOWN:
+                    # Exit on button 1 (usually 'B' on Xbox or 'Circle' on PS)
+                    if event.button == 1:
+                        running = False
 
-    # Backward
-    print(f"\nBackward at 50% for 2 seconds...")
-    ranger.set_motor_speeds_percent(left=MOTOR_SPEED_PERCENT, right=-MOTOR_SPEED_PERCENT)
-    await ranger.send_to_relay()
-    await asyncio.sleep(2.0)
+            # Get axis values
+            # Left stick Y (axis 1) for throttle
+            # Left stick X (axis 0) for steering
+            # Most modern controllers:
+            # Axis 0: Left Stick X
+            # Axis 1: Left Stick Y
+            # Axis 2: Right Stick X (sometimes 3)
+            # Axis 3: Right Stick Y (sometimes 4)
 
-    # Final stop
-    print("\nFinal stop!")
-    ranger.set_motor_speeds_percent(left=0, right=0)
-    await ranger.send_to_relay()
-    await asyncio.sleep(0.5)
+            throttle = -joystick.get_axis(1) # Negate because Y is usually inverted
+            steering = joystick.get_axis(0)
 
-    # Unsubscribe cleanly
-    await ranger.stop_notify()
-    print("\n✅ Demo complete!")
+            throttle = apply_deadzone(throttle, DEADZONE)
+            steering = apply_deadzone(steering, DEADZONE)
 
+            # Arcade drive mapping
+            # When driving backwards, we invert the steering to make it feel more natural
+            if throttle < 0:
+                left_speed = (throttle + steering) * 100
+                right_speed = (throttle - steering) * 100
+            else:
+                left_speed = (throttle - steering) * 100
+                right_speed = (throttle + steering) * 100
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+            # Clamp to [-100, 100]
+            left_speed = max(-100, min(100, left_speed))
+            right_speed = max(-100, min(100, right_speed))
+
+            # Note: mBot Ranger might need inverted signs depending on motor orientation
+            # Based on main.py:
+            # Forward: left=-50, right=50
+            # Backward: left=50, right=-50
+            # So for forward (throttle > 0): left should be negative, right positive.
+
+            ranger.set_motor_speeds_percent(left=-left_speed, right=right_speed)
+            await ranger.send_to_relay()
+
+            await asyncio.sleep(REFRESH_RATE)
+
+    except asyncio.CancelledError:
+        pass
+    finally:
+        print("\nStopping mBot...")
+        ranger.set_motor_speeds_percent(0, 0)
+        await ranger.send_to_relay()
+        pygame.quit()
 
 async def main():
-    print("=== mBot Ranger — BLE Demo with response notifications ===\n")
+    print("=== mBot Ranger Joystick Control ===\n")
 
     device = await find_mbot()
     if device is None:
-        print("❌ mBot Ranger not found. Make sure it is powered on and in range.")
+        print("❌ mBot Ranger not found.")
         return
 
-    print(f"✅ Found:   {device.name}")
-    print(f"   Address: {device.address}")
+    print(f"✅ Found:   {device.name} ({device.address})")
 
     ranger = MbotRanger(name=str(device.name), address=device.address)
     ranger.initialize_relay_client()
 
-    if ranger.relay_client is None:
-        print("❌ Failed to initialize BLE client.")
-        return
-
     print(f"\nConnecting...")
     async with ranger.relay_client:
-        print(f"✅ Connected! (MTU: {ranger.relay_client.mtu_size})\n")
-        await run_demo(ranger)
-
+        print(f"✅ Connected!\n")
+        await joystick_loop(ranger)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
