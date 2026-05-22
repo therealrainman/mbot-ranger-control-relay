@@ -2,18 +2,45 @@
 from __future__ import annotations
 
 import sys
+
 # Set coinit_flags before any COM-related imports to ensure MTA on Windows
-sys.coinit_flags = 0  # 0 means MTA
+sys.coinit_flags = 0  # 0 means MTA (for pythoncom)
+
+def force_mta():
+    """
+    Force the current thread to MTA (Multi-Threaded Apartment) mode on Windows.
+    This is necessary because libraries like Pygame/SDL can initialize COM as STA,
+    which breaks Bleak's WinRT callbacks.
+    """
+    if sys.platform != "win32":
+        return
+    import ctypes
+    ole32 = ctypes.windll.ole32
+    # COINIT_MULTITHREADED = 0x0
+    # RPC_E_CHANGED_MODE = 0x80010106 (signed: -2147417850)
+    # We call CoUninitialize until we can successfully set MTA or we reach a limit.
+    for _ in range(10):
+        res = ole32.CoInitializeEx(None, 0)
+        if res in (0, 1): # S_OK or S_FALSE
+            return
+        if res == -2147417850:
+            ole32.CoUninitialize()
+        else:
+            break
+
+# Attempt to force MTA before importing other modules
+force_mta()
 
 import asyncio
 
 import pygame
-# On Windows, pygame or other modules might initialize COM as STA (Single Threaded Apartment),
-# which can break Bleak's callbacks. We try to uninitialize it to allow MTA.
+
+# Use bleak's allow_sta as a fallback. If forcing MTA fails, allow_sta()
+# tells Bleak to trust that we are running a message loop.
 if sys.platform == "win32":
     try:
-        from bleak.backends.winrt.util import uninitialize_sta
-        uninitialize_sta()
+        from bleak.backends.winrt.util import allow_sta
+        allow_sta()
     except (ImportError, AttributeError):
         pass
 
@@ -41,7 +68,20 @@ async def scan_for_devices() -> dict[str, BLEDevice]:
     target_names = set(BUMPERBOTS_NAME_ID_MAP.values())
     print(f"Scanning for {len(target_names)} device(s) ({SCAN_TIMEOUT}s)...")
 
-    discovered = await BleakScanner.discover(timeout=SCAN_TIMEOUT)
+    if sys.platform == "win32":
+        # On Windows, we pump events during the scan in case we are in STA mode.
+        # This ensures WinRT callbacks are processed even if MTA forcing failed.
+        scanner = BleakScanner()
+        await scanner.start()
+        stop_time = asyncio.get_event_loop().time() + SCAN_TIMEOUT
+        while asyncio.get_event_loop().time() < stop_time:
+            pygame.event.pump()
+            await asyncio.sleep(0.1)
+        await scanner.stop()
+        discovered = scanner.discovered_devices
+    else:
+        discovered = await BleakScanner.discover(timeout=SCAN_TIMEOUT)
+
     found: dict[str, BLEDevice] = {}
 
     for device in discovered:
@@ -151,13 +191,8 @@ async def main():
     pygame.init()
     pygame.joystick.init()
 
-    # Re-verify MTA on Windows after pygame initialization
-    if sys.platform == "win32":
-        try:
-            from bleak.backends.winrt.util import uninitialize_sta
-            uninitialize_sta()
-        except (ImportError, AttributeError):
-            pass
+    # Re-force MTA on Windows after pygame initialization
+    force_mta()
 
     # 1. Scan for all robots
     print("[ Step 1 / 3 ] Scanning for robots...")
