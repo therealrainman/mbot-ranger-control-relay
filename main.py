@@ -111,10 +111,13 @@ async def main():
     ranger = MbotRanger(name=str(device.name), address=device.address)
     ranger.initialize_relay_client()
 
-    print(f"\nConnecting...")
-    async with ranger.relay_client:
-        print(f"✅ Connected!\n")
-        await joystick_loop(ranger)
+    if ranger.relay_client:
+        print(f"\nConnecting...")
+        async with ranger.relay_client:
+            print(f"✅ Connected!\n")
+            await joystick_loop(ranger)
+    else:
+        print("Relay client not initialized!")
 
 if __name__ == "__main__":
     try:
