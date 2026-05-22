@@ -109,7 +109,6 @@ async def main():
     print(f"✅ Found:   {device.name} ({device.address})")
 
     ranger = MbotRanger(name=str(device.name), address=device.address)
-    ranger.initialize_relay_client()
 
     if ranger.relay_client:
         print(f"\nConnecting...")
