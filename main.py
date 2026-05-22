@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 import asyncio
+
 import pygame
 from bleak import BleakScanner
+
 from src.mbot_ranger import MbotRanger
 
 MBOT_NAME_KEYWORDS = ["makeblock", "mbot", "ranger"]
 SCAN_TIMEOUT = 5  # seconds
 DEADZONE = 0.1
 REFRESH_RATE = 0.05  # 20Hz update rate
+
 
 async def find_mbot():
     print(f"Scanning for mBot Ranger ({SCAN_TIMEOUT}s)...")
@@ -18,10 +21,12 @@ async def find_mbot():
             return device
     return None
 
+
 def apply_deadzone(value, deadzone):
     if abs(value) < deadzone:
         return 0.0
     return value
+
 
 async def joystick_loop(ranger: MbotRanger):
     pygame.init()
@@ -60,14 +65,14 @@ async def joystick_loop(ranger: MbotRanger):
             # Axis 2: Right Stick X (sometimes 3)
             # Axis 3: Right Stick Y (sometimes 4)
 
-            throttle = -joystick.get_axis(1) # Negate because Y is usually inverted
+            throttle = -joystick.get_axis(1)  # Negate because Y is usually inverted
             steering = joystick.get_axis(0)
 
             throttle = apply_deadzone(throttle, DEADZONE)
             steering = apply_deadzone(steering, DEADZONE)
 
             # Arcade drive mapping
-            # When driving backwards, we invert the steering to make it feel more natural
+            # When driving backwards, invert the steering to make it feel more natural
             if throttle < 0:
                 left_speed = (throttle + steering) * 100
                 right_speed = (throttle - steering) * 100
@@ -98,6 +103,7 @@ async def joystick_loop(ranger: MbotRanger):
         await ranger.send_to_relay()
         pygame.quit()
 
+
 async def main():
     print("=== mBot Ranger Joystick Control ===\n")
 
@@ -111,12 +117,13 @@ async def main():
     ranger = MbotRanger(name=str(device.name), address=device.address)
 
     if ranger.relay_client:
-        print(f"\nConnecting...")
+        print("\nConnecting...")
         async with ranger.relay_client:
-            print(f"✅ Connected!\n")
+            print("✅ Connected!\n")
             await joystick_loop(ranger)
     else:
         print("Relay client not initialized!")
+
 
 if __name__ == "__main__":
     try:

@@ -8,3 +8,8 @@ dependencies = [
     "bleak",
     "pygame"
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.14",
+]

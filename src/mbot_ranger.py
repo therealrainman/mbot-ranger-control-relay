@@ -1,7 +1,10 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import ClassVar
+
 from bleak import BleakClient
+
 
 @dataclass
 class MbotRanger:
@@ -27,9 +30,16 @@ class MbotRanger:
         self.right_motor_speed = MotorSpeed.from_percent(right)
 
     async def send_to_relay(self):
-        payload = MbotRanger.PACKET_HEADER + MbotRanger.PACKET_PREFIX + self.left_motor_speed.get_bytes() + self.right_motor_speed.get_bytes()
+        payload = (
+            MbotRanger.PACKET_HEADER
+            + MbotRanger.PACKET_PREFIX
+            + self.left_motor_speed.get_bytes()
+            + self.right_motor_speed.get_bytes()
+        )
         print(f"    Sending: {payload.hex(' ').upper()}")
-        await self.relay_client.write_gatt_char(MbotRanger.BLE_WRITE_UUID, payload, response=False)
+        await self.relay_client.write_gatt_char(
+            MbotRanger.BLE_WRITE_UUID, payload, response=False
+        )
 
     async def start_notify(self):
         await self.relay_client.start_notify(MbotRanger.BLE_NOTIFY_UUID, self.on_notify)
