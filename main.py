@@ -1,9 +1,22 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import sys
+# Set coinit_flags before any COM-related imports to ensure MTA on Windows
+sys.coinit_flags = 0  # 0 means MTA
+
 import asyncio
 
 import pygame
+# On Windows, pygame or other modules might initialize COM as STA (Single Threaded Apartment),
+# which can break Bleak's callbacks. We try to uninitialize it to allow MTA.
+if sys.platform == "win32":
+    try:
+        from bleak.backends.winrt.util import uninitialize_sta
+        uninitialize_sta()
+    except (ImportError, AttributeError):
+        pass
+
 from bleak import BleakScanner
 from bleak.backends.device import BLEDevice
 
@@ -137,6 +150,14 @@ async def main():
 
     pygame.init()
     pygame.joystick.init()
+
+    # Re-verify MTA on Windows after pygame initialization
+    if sys.platform == "win32":
+        try:
+            from bleak.backends.winrt.util import uninitialize_sta
+            uninitialize_sta()
+        except (ImportError, AttributeError):
+            pass
 
     # 1. Scan for all robots
     print("[ Step 1 / 3 ] Scanning for robots...")
