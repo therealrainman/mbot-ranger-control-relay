@@ -37,7 +37,7 @@ async def joystick_loop(ranger: MbotRanger):
 
     print("\nControl layout:")
     print(" - Left Stick Y: Forward / Backward")
-    print(" - Right Stick X: Left / Right (Turning)")
+    print(" - Left Stick X: Left / Right (Turning)")
     print(" - Press 'B' button or Ctrl+C to exit")
 
     try:
@@ -53,7 +53,7 @@ async def joystick_loop(ranger: MbotRanger):
 
             # Get axis values
             # Left stick Y (axis 1) for throttle
-            # Right stick X (axis 2 or 3 depending on controller) for steering
+            # Left stick X (axis 0) for steering
             # Most modern controllers:
             # Axis 0: Left Stick X
             # Axis 1: Left Stick Y
@@ -61,14 +61,19 @@ async def joystick_loop(ranger: MbotRanger):
             # Axis 3: Right Stick Y (sometimes 4)
 
             throttle = -joystick.get_axis(1) # Negate because Y is usually inverted
-            steering = joystick.get_axis(2) if joystick.get_numaxes() > 2 else joystick.get_axis(0)
+            steering = joystick.get_axis(0)
 
             throttle = apply_deadzone(throttle, DEADZONE)
             steering = apply_deadzone(steering, DEADZONE)
 
             # Arcade drive mapping
-            left_speed = (throttle + steering) * 100
-            right_speed = (throttle - steering) * 100
+            # When driving backwards, we invert the steering to make it feel more natural
+            if throttle < 0:
+                left_speed = (throttle + steering) * 100
+                right_speed = (throttle - steering) * 100
+            else:
+                left_speed = (throttle - steering) * 100
+                right_speed = (throttle + steering) * 100
 
             # Clamp to [-100, 100]
             left_speed = max(-100, min(100, left_speed))
