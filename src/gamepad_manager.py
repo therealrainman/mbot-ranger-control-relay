@@ -22,8 +22,11 @@ class GamepadManager:
 
     def connect(self, joystick_index: int) -> None:
         self._joystick = pygame.joystick.Joystick(joystick_index)
-        self._joystick.init()
-        print(f"✅ Controller {joystick_index} paired to {self.ranger.name}")
+        if self._joystick:
+            self._joystick.init()
+            print(f"✅ Controller {joystick_index} paired to {self.ranger.name}")
+        else:
+            print(f"Failed to initialize controller {joystick_index} for {self.ranger}")
 
     def _apply_deadzone(self, value: float) -> float:
         return 0.0 if abs(value) < self.deadzone else value

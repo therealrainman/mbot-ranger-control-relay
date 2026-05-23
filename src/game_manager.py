@@ -5,6 +5,7 @@ import pygame
 from bleak import BLEDevice, BleakScanner
 
 from gamepad_manager import GamepadManager, field
+from mbot_ranger import MbotRanger
 from utils import wait_for_button_press
 
 
@@ -17,10 +18,41 @@ class GameManager:
     found_devices: dict[str, BLEDevice] = field(init=False, repr=False)
     controller_pairings: dict[str, int] = field(init=False, repr=False)
 
-    def __post_init__(self):
-        pygame.init()
-        pygame.joystick.init()
-        print(self.name_id_map)
+    async def __post_init__(self):
+        # 1. Scan for all robots
+        print("[ Step 1 / 3 ] Scanning for robots...")
+        await self.scan_for_devices()
+        self.verify_discovery()
+
+        # 2. Verify enough controllers
+        print("\n[ Step 2 / 3 ] Checking controllers...")
+        self.verify_controllers()
+
+        # 3. Interactive pairing
+        print("\n[ Step 3 / 3 ] Pairing controllers to robots...")
+        self.init_joysticks()
+        await self.pair_controllers()
+
+        # 4. Create GamepadManagers List
+        self.gamepad_manager_list = [
+            GamepadManager(
+                ranger=MbotRanger(
+                    name=name,
+                    address=self.found_devices[name].address,
+                )
+            )
+            for name in self.found_devices_names
+        ]
+
+        # 5. Pair controllers to GamepadManagers
+        for gp_manager in self.gamepad_manager_list:
+            gp_manager.connect(self.controller_pairings[gp_manager.ranger.name])
+
+        # 6. Connect all BLE clients and run concurrently
+        print("\n✅ All paired! Connecting to robots...\n")
+        async with asyncio.TaskGroup() as tg:
+            for gp_manager in self.gamepad_manager_list:
+                tg.create_task(self.run_single_gamepad_manager(gp_manager))
 
     @property
     def found_devices_names(self):
@@ -119,3 +151,9 @@ class GameManager:
                 self.controller_pairings[name] = joystick_index
                 print(f"  ✅ Controller {joystick_index} paired to [{name}]")
                 break
+
+    @staticmethod
+    async def run_single_gamepad_manager(gamepad_manager_instance: GamepadManager):
+        async with gamepad_manager_instance.ranger.relay_client:
+            print(f"✅ [{gamepad_manager_instance.ranger.name}] Connected!")
+            await gamepad_manager_instance.run()
