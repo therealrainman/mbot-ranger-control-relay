@@ -41,7 +41,7 @@ async def main():
     # Re-force MTA on Windows after pygame initialization
     force_mta()
 
-    GameManager(BUMPERBOTS_NAME_ID_MAP)
+    await GameManager(BUMPERBOTS_NAME_ID_MAP).run_forever()
     print("\n✅ All done. Goodbye!")
     pygame.quit()
 

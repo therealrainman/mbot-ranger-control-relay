@@ -1,10 +1,10 @@
 import asyncio
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import pygame
 from bleak import BLEDevice, BleakScanner
 
-from src.gamepad_manager import GamepadManager, field
+from src.gamepad_manager import GamepadManager
 from src.mbot_ranger import MbotRanger
 from src.utils import wait_for_button_press
 
@@ -18,10 +18,7 @@ class GameManager:
     found_devices: dict[str, BLEDevice] = field(init=False, repr=False)
     controller_pairings: dict[str, int] = field(init=False, repr=False)
 
-    def __post_init__(self):
-        asyncio.ensure_future(self._async_init())
-
-    async def _async_init(self):
+    async def run_forever(self):
         # 1. Scan for all robots
         print("[ Step 1 / 3 ] Scanning for robots...")
         await self.scan_for_devices()
