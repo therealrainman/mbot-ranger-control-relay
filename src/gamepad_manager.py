@@ -81,8 +81,10 @@ class GamepadManager:
                     self.on_update()
                 await asyncio.sleep(self.refresh_rate)
         except asyncio.CancelledError:
-            pass
+            raise
         finally:
             print(f"Stopping {self.ranger}...")
             self.ranger.set_motor_speeds_percent(0, 0)
-            await self.ranger.send_to_relay()
+            await asyncio.shield(self.ranger.send_to_relay())
+            await asyncio.sleep(0.5)
+            await asyncio.shield(self.ranger.send_to_relay())
