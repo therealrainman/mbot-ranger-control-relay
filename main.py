@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
-
 import asyncio
 
 import pygame
@@ -23,12 +21,10 @@ async def main():
     print("Setup complete!")
     await game_manager.run_forever()
 
-    print("\n✅ All done. Goodbye!")
-    pygame.quit()
-
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        pass
+        print("Stopping bots and shutting down...")
+        pygame.quit()

@@ -76,15 +76,21 @@ class GameManager:
         for gp_manager in self.gamepad_manager_list:
             axes_text = Text("-")
             payload_text = Text("-")
-            gp_manager.dashboard_row = RobotDashboardRow(axes=axes_text, payload=payload_text)
+            gp_manager.dashboard_row = RobotDashboardRow(
+                axes=axes_text, payload=payload_text
+            )
             table.add_row(
-                Text(gp_manager.ranger.name, style=f"bold {gp_manager.ranger.name.lower()}"),
+                Text(
+                    gp_manager.ranger.name,
+                    style=f"bold {gp_manager.ranger.name.lower()}",
+                ),
                 gp_manager.ranger.address,
                 axes_text,
                 payload_text,
             )
 
         with Live(table, refresh_per_second=30) as live:
+
             def refresh_callback():
                 live.refresh()
 
@@ -93,8 +99,6 @@ class GameManager:
                 for gp_manager in self.gamepad_manager_list:
                     gp_manager.on_update = refresh_callback
                     tg.create_task(self._run_single_gamepad_manager(gp_manager))
-
-
 
     ### Scan and connect to robots###
     async def _scan_for_devices(self):
@@ -203,22 +207,21 @@ class GameManager:
         This is necessary because libraries like Pygame/SDL can initialize COM as STA,
         which breaks Bleak's WinRT callbacks.
         """
-        if sys.platform != "win32":
-            return
-        import ctypes
+        if sys.platform == "win32":
+            import ctypes
 
-        ole32 = ctypes.windll.ole32
-        # COINIT_MULTITHREADED = 0x0
-        # RPC_E_CHANGED_MODE = 0x80010106 (signed: -2147417850)
-        # We call CoUninitialize until we can successfully set MTA or we reach a limit.
-        for _ in range(10):
-            res = ole32.CoInitializeEx(None, 0)
-            if res in (0, 1):  # S_OK or S_FALSE
-                return
-            if res == -2147417850:
-                ole32.CoUninitialize()
-            else:
-                break
+            ole32 = ctypes.windll.ole32
+            # COINIT_MULTITHREADED = 0x0
+            # RPC_E_CHANGED_MODE = 0x80010106 (signed: -2147417850)
+            # We call CoUninitialize until we can successfully set MTA or we reach a limit.
+            for _ in range(10):
+                res = ole32.CoInitializeEx(None, 0)
+                if res in (0, 1):  # S_OK or S_FALSE
+                    return
+                if res == -2147417850:
+                    ole32.CoUninitialize()
+                else:
+                    break
 
     @staticmethod
     async def wait_for_button_press(

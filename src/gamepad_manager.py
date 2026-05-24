@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 from dataclasses import dataclass, field
 from typing import Callable
@@ -19,7 +17,9 @@ class RobotDashboardRow:
 @dataclass
 class GamepadManager:
     ranger: MbotRanger
-    dashboard_row: RobotDashboardRow | None = field(default=None, init=False, repr=False)
+    dashboard_row: RobotDashboardRow | None = field(
+        default=None, init=False, repr=False
+    )
     deadzone: float = 0.1
     refresh_rate: float = 0.0333  # 30Hz
     controller_joystick: pygame.joystick.JoystickType | None = field(
