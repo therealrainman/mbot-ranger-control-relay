@@ -17,6 +17,8 @@ class MbotRanger:
     address: str
     left_motor_speed: MotorSpeed = field(default_factory=lambda: MotorSpeed(raw=0))
     right_motor_speed: MotorSpeed = field(default_factory=lambda: MotorSpeed(raw=0))
+    last_payload_hex: str = field(default="-", init=False)
+    last_axes: str = field(default="-", init=False)
     relay_client: BleakClient = field(init=False, repr=False)
 
     def __post_init__(self):
@@ -36,7 +38,7 @@ class MbotRanger:
             + self.left_motor_speed.get_bytes()
             + self.right_motor_speed.get_bytes()
         )
-        print(f"    Sending: {payload.hex(' ').upper()}")
+        self.last_payload_hex = payload.hex(" ").upper()
         await self.relay_client.write_gatt_char(
             MbotRanger.BLE_WRITE_UUID, payload, response=False
         )
@@ -58,7 +60,7 @@ class MbotRanger:
 
     @staticmethod
     def on_notify(_characteristic, data: bytearray):
-        print(f"    Received: {data.hex(' ').upper()}")
+        pass
 
 
 @dataclass(frozen=True)
