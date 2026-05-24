@@ -18,6 +18,7 @@ class MbotRanger:
     left_motor_speed: MotorSpeed = field(default_factory=lambda: MotorSpeed(raw=0))
     right_motor_speed: MotorSpeed = field(default_factory=lambda: MotorSpeed(raw=0))
     last_payload_hex: str = field(default="-", init=False)
+    last_axes: str = field(default="-", init=False)
     relay_client: BleakClient = field(init=False, repr=False)
 
     def __post_init__(self):

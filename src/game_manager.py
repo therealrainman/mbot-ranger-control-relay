@@ -66,7 +66,7 @@ class GameManager:
         # Connect all BLE clients and run concurrently
         print("\n✅ All paired! Connecting to robots...\n")
 
-        with Live(self._generate_table(), refresh_per_second=10) as live:
+        with Live(self._generate_table(), refresh_per_second=30) as live:
             async with asyncio.TaskGroup() as tg:
                 # 1. Start robot tasks
                 for gp_manager in self.gamepad_manager_list:
@@ -79,12 +79,14 @@ class GameManager:
         table = Table(title="mBot Ranger Dashboard")
         table.add_column("Name", justify="left", style="cyan")
         table.add_column("Address", justify="left", style="magenta")
-        table.add_column("Last Byte Sent", justify="left", style="green")
+        table.add_column("Axes", justify="left", style="yellow")
+        table.add_column("Last Byte Sent", justify="left", style="bold green")
 
         for gp_manager in self.gamepad_manager_list:
             table.add_row(
                 gp_manager.ranger.name,
                 gp_manager.ranger.address,
+                gp_manager.ranger.last_axes,
                 gp_manager.ranger.last_payload_hex,
             )
         return table
@@ -92,7 +94,7 @@ class GameManager:
     async def _update_dashboard(self, live: Live):
         while True:
             live.update(self._generate_table())
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.033)
 
     ### Scan and connect to robots###
     async def _scan_for_devices(self):

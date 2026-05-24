@@ -56,6 +56,7 @@ class GamepadManager:
             while True:
                 pygame.event.get()
                 throttle, steering = self._read_axes()
+                self.ranger.last_axes = f"T: {throttle:>5.2f} S: {steering:>5.2f}"
                 left, right = self._compute_motor_speeds(throttle, steering)
                 self.ranger.set_motor_speeds_percent(left=-left, right=right)
                 await self.ranger.send_to_relay()
