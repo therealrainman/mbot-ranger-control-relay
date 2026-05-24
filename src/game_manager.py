@@ -6,8 +6,6 @@ from bleak import BLEDevice, BleakScanner
 
 from src.gamepad_manager import GamepadManager
 from src.mbot_ranger import MbotRanger
-from src.utils import wait_for_button_press
-
 
 @dataclass
 class GameManager:
@@ -20,7 +18,7 @@ class GameManager:
     _joysticks: list[pygame.joystick.JoystickType] = field(init=False, repr=False)
 
     def __post_init__(self):
-        _ = self
+        self.force_mta()
         pygame.init()
         pygame.joystick.init()
         pygame.display.set_mode((1, 1))
@@ -72,20 +70,7 @@ class GameManager:
         """Scan and return a map of device_name → BLEDevice for all found devices."""
         target_names = set(self.name_id_map.values())
         print(f"Scanning for {len(target_names)} device(s) ({self.scan_timeout_seconds}s)...")
-
-        if sys.platform == "win32":
-            # On Windows, we pump events during the scan in case we are in STA mode.
-            # This ensures WinRT callbacks are processed even if MTA forcing failed.
-            scanner = BleakScanner()
-            await scanner.start()
-            stop_time = asyncio.get_event_loop().time() + self.scan_timeout_seconds
-            while asyncio.get_event_loop().time() < stop_time:
-                pygame.event.pump()
-                await asyncio.sleep(0.1)
-            await scanner.stop()
-            discovered = scanner.discovered_devices
-        else:
-            discovered = await BleakScanner.discover(timeout=self.scan_timeout_seconds)
+        discovered = await BleakScanner.discover(timeout=self.scan_timeout_seconds)
 
         found: dict[str, BLEDevice] = {}
 
@@ -141,7 +126,7 @@ class GameManager:
 
         for name in self.found_devices_names:
             while True:
-                joystick_index = await wait_for_button_press(
+                joystick_index = await self.wait_for_button_press(
                     button=0,  # 'A' on Xbox, 'Cross' on PS
                     prompt=f"\n🎮 Press 'A' on the controller for [{name}]...",
                 )
@@ -168,3 +153,43 @@ class GameManager:
         async with gamepad_manager_instance.ranger.relay_client:
             print(f"✅ [{gamepad_manager_instance.ranger.name}] Connected!")
             await gamepad_manager_instance.run()
+
+    ### Helpers ###
+    # noinspection PyUnresolvedReferences
+    @staticmethod
+    def force_mta():
+        """
+        Force the current thread to MTA (Multi-Threaded Apartment) mode on Windows.
+        This is necessary because libraries like Pygame/SDL can initialize COM as STA,
+        which breaks Bleak's WinRT callbacks.
+        """
+        if sys.platform != "win32":
+            return
+        import ctypes
+        ole32 = ctypes.windll.ole32
+        # COINIT_MULTITHREADED = 0x0
+        # RPC_E_CHANGED_MODE = 0x80010106 (signed: -2147417850)
+        # We call CoUninitialize until we can successfully set MTA or we reach a limit.
+        for _ in range(10):
+            res = ole32.CoInitializeEx(None, 0)
+            if res in (0, 1):  # S_OK or S_FALSE
+                return
+            if res == -2147417850:
+                ole32.CoUninitialize()
+            else:
+                break
+
+    @staticmethod
+    async def wait_for_button_press(
+        button: int, prompt: str, timeout: float = 30.0
+    ) -> int | None:
+        print(prompt)
+        deadline = asyncio.get_event_loop().time() + timeout
+
+        while asyncio.get_event_loop().time() < deadline:
+            for event in pygame.event.get():
+                if event.type == pygame.JOYBUTTONDOWN and event.button == button:
+                    return event.joy
+            await asyncio.sleep(0.05)
+
+        return None

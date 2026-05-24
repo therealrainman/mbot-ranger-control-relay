@@ -1,18 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import sys
 from src.game_manager import GameManager
 import asyncio
 import pygame
-
-# Use bleak's allow_sta as a fallback. If forcing MTA fails, allow_sta()
-# tells Bleak to trust that we are running a message loop.
-if sys.platform == "win32":
-    try:
-        from bleak.backends.winrt.util import allow_sta
-        allow_sta()
-    except (ImportError, AttributeError):
-        pass
 
 BUMPERBOTS_NAME_ID_MAP = {
     "Blue": "Makeblock_LE703e97e38098",
