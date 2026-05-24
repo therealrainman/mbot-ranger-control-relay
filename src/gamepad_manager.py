@@ -7,15 +7,12 @@ import pygame
 
 from src.mbot_ranger import MbotRanger
 
-DEADZONE = 0.1
-REFRESH_RATE = 0.05  # 20Hz
-
 
 @dataclass
 class GamepadManager:
     ranger: MbotRanger
-    deadzone: float = DEADZONE
-    refresh_rate: float = REFRESH_RATE
+    deadzone: float = 0.1
+    refresh_rate: float = 0.0333  # 30Hz
     _joystick: pygame.joystick.JoystickType | None = field(
         default=None, init=False, repr=False
     )
@@ -52,15 +49,6 @@ class GamepadManager:
         steering = self._joystick.get_axis(0)
         return throttle, steering
 
-    def _handle_events(self) -> bool:
-        pygame.event.pump()  # ← add this
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return False
-            if event.type == pygame.JOYBUTTONDOWN and event.button == 1:
-                return False
-        return True
-
     async def run(self) -> None:
         if self._joystick is None:
             raise RuntimeError(f"Call connect() before run() for {self.ranger.name}")
@@ -71,7 +59,8 @@ class GamepadManager:
         print("  - Press 'B' / 'Circle' or Ctrl+C to exit")
 
         try:
-            while self._handle_events():
+            while True:
+                pygame.event.get()
                 throttle, steering = self._read_axes()
                 left, right = self._compute_motor_speeds(throttle, steering)
                 self.ranger.set_motor_speeds_percent(left=-left, right=right)
