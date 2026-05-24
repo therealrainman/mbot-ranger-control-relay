@@ -1,5 +1,5 @@
 import asyncio
-import sys
+import os, sys
 from dataclasses import dataclass, field
 
 import pygame
@@ -24,6 +24,7 @@ class GameManager:
 
     def __post_init__(self):
         self.force_mta()
+        os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"
         pygame.init()
         pygame.joystick.init()
         pygame.display.set_mode((1, 1))
