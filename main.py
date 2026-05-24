@@ -1,19 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-
 import sys
-
 from src.game_manager import GameManager
-from src.utils import force_mta
-
-# Set coinit_flags before any COM-related imports to ensure MTA on Windows
-sys.coinit_flags = 0  # 0 means MTA (for pythoncom)
-
-# Attempt to force MTA before importing other modules
-force_mta()
-
 import asyncio
-
 import pygame
 
 # Use bleak's allow_sta as a fallback. If forcing MTA fails, allow_sta()
@@ -35,13 +24,11 @@ BUMPERBOTS_NAME_ID_MAP = {
 async def main():
     print("=== Bumperbots Multi-Robot Controller ===\n")
 
-    pygame.init()
-    pygame.joystick.init()
+    game_manager = GameManager(BUMPERBOTS_NAME_ID_MAP)
+    await game_manager.setup()
+    print("Setup complete!")
+    await game_manager.run_forever()
 
-    # Re-force MTA on Windows after pygame initialization
-    force_mta()
-
-    await GameManager(BUMPERBOTS_NAME_ID_MAP).run_forever()
     print("\n✅ All done. Goodbye!")
     pygame.quit()
 
