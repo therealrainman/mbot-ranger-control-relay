@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 
 import pygame
 from bleak import BleakScanner, BLEDevice
+from rich.live import Live
+from rich.table import Table
 
 from src.gamepad_manager import GamepadManager
 from src.mbot_ranger import MbotRanger
@@ -63,9 +65,34 @@ class GameManager:
     async def run_forever(self):
         # Connect all BLE clients and run concurrently
         print("\n✅ All paired! Connecting to robots...\n")
-        async with asyncio.TaskGroup() as tg:
-            for gp_manager in self.gamepad_manager_list:
-                tg.create_task(self._run_single_gamepad_manager(gp_manager))
+
+        with Live(self._generate_table(), refresh_per_second=10) as live:
+            async with asyncio.TaskGroup() as tg:
+                # 1. Start robot tasks
+                for gp_manager in self.gamepad_manager_list:
+                    tg.create_task(self._run_single_gamepad_manager(gp_manager))
+
+                # 2. Start table update task
+                tg.create_task(self._update_dashboard(live))
+
+    def _generate_table(self) -> Table:
+        table = Table(title="mBot Ranger Dashboard")
+        table.add_column("Name", justify="left", style="cyan")
+        table.add_column("Address", justify="left", style="magenta")
+        table.add_column("Last Byte Sent", justify="left", style="green")
+
+        for gp_manager in self.gamepad_manager_list:
+            table.add_row(
+                gp_manager.ranger.name,
+                gp_manager.ranger.address,
+                gp_manager.ranger.last_payload_hex,
+            )
+        return table
+
+    async def _update_dashboard(self, live: Live):
+        while True:
+            live.update(self._generate_table())
+            await asyncio.sleep(0.1)
 
     ### Scan and connect to robots###
     async def _scan_for_devices(self):
@@ -163,7 +190,6 @@ class GameManager:
     @staticmethod
     async def _run_single_gamepad_manager(gamepad_manager_instance: GamepadManager):
         async with gamepad_manager_instance.ranger.relay_client:
-            print(f"✅ [{gamepad_manager_instance.ranger.name}] Connected!")
             await gamepad_manager_instance.run()
 
     ### Helpers ###

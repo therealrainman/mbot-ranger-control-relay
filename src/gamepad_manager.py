@@ -13,15 +13,14 @@ class GamepadManager:
     ranger: MbotRanger
     deadzone: float = 0.1
     refresh_rate: float = 0.0333  # 30Hz
-    _joystick: pygame.joystick.JoystickType | None = field(
+    controller_joystick: pygame.joystick.JoystickType | None = field(
         default=None, init=False, repr=False
     )
 
     def connect(self, joystick_index: int) -> None:
-        self._joystick = pygame.joystick.Joystick(joystick_index)
-        if self._joystick:
-            self._joystick.init()
-            print(f"✅ Controller {joystick_index} paired to {self.ranger.name}")
+        self.controller_joystick = pygame.joystick.Joystick(joystick_index)
+        if self.controller_joystick:
+            self.controller_joystick.init()
         else:
             print(f"Failed to initialize controller {joystick_index} for {self.ranger}")
 
@@ -44,19 +43,14 @@ class GamepadManager:
         return max(-100, min(100, left)), max(-100, min(100, right))
 
     def _read_axes(self) -> tuple[float, float]:
-        assert self._joystick is not None
-        throttle = -self._joystick.get_axis(1)  # Negate: Y axis is inverted
-        steering = self._joystick.get_axis(0)
+        assert self.controller_joystick is not None
+        throttle = -self.controller_joystick.get_axis(1)  # Negate: Y axis is inverted
+        steering = self.controller_joystick.get_axis(0)
         return throttle, steering
 
     async def run(self) -> None:
-        if self._joystick is None:
+        if self.controller_joystick is None:
             raise RuntimeError(f"Call connect() before run() for {self.ranger.name}")
-
-        print(f"\n[{self.ranger.name}] Control layout:")
-        print("  - Left Stick Y: Forward / Backward")
-        print("  - Left Stick X: Left / Right (Turning)")
-        print("  - Press 'B' / 'Circle' or Ctrl+C to exit")
 
         try:
             while True:
@@ -69,6 +63,5 @@ class GamepadManager:
         except asyncio.CancelledError:
             pass
         finally:
-            print(f"\n[{self.ranger.name}] Stopping...")
             self.ranger.set_motor_speeds_percent(0, 0)
             await self.ranger.send_to_relay()
