@@ -6,8 +6,9 @@ import pygame
 from bleak import BleakScanner, BLEDevice
 from rich.live import Live
 from rich.table import Table
+from rich.text import Text
 
-from src.gamepad_manager import GamepadManager
+from src.gamepad_manager import GamepadManager, RobotDashboardRow
 from src.mbot_ranger import MbotRanger
 
 
@@ -66,16 +67,6 @@ class GameManager:
         # Connect all BLE clients and run concurrently
         print("\n✅ All paired! Connecting to robots...\n")
 
-        with Live(self._generate_table(), refresh_per_second=30) as live:
-            async with asyncio.TaskGroup() as tg:
-                # 1. Start robot tasks
-                for gp_manager in self.gamepad_manager_list:
-                    tg.create_task(self._run_single_gamepad_manager(gp_manager))
-
-                # 2. Start table update task
-                tg.create_task(self._update_dashboard(live))
-
-    def _generate_table(self) -> Table:
         table = Table(title="mBot Ranger Dashboard")
         table.add_column("Name", justify="left", style="cyan")
         table.add_column("Address", justify="left", style="magenta")
@@ -83,18 +74,27 @@ class GameManager:
         table.add_column("Last Byte Sent", justify="left", style="bold green")
 
         for gp_manager in self.gamepad_manager_list:
+            axes_text = Text("-")
+            payload_text = Text("-")
+            gp_manager.dashboard_row = RobotDashboardRow(axes=axes_text, payload=payload_text)
             table.add_row(
                 gp_manager.ranger.name,
                 gp_manager.ranger.address,
-                gp_manager.ranger.last_axes,
-                gp_manager.ranger.last_payload_hex,
+                axes_text,
+                payload_text,
             )
-        return table
 
-    async def _update_dashboard(self, live: Live):
-        while True:
-            live.update(self._generate_table())
-            await asyncio.sleep(0.033)
+        with Live(table, refresh_per_second=30) as live:
+            def refresh_callback():
+                live.refresh()
+
+            async with asyncio.TaskGroup() as tg:
+                # 1. Start robot tasks
+                for gp_manager in self.gamepad_manager_list:
+                    gp_manager.on_update = refresh_callback
+                    tg.create_task(self._run_single_gamepad_manager(gp_manager))
+
+
 
     ### Scan and connect to robots###
     async def _scan_for_devices(self):
