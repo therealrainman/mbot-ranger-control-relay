@@ -1,11 +1,13 @@
 import asyncio
 import sys
 from dataclasses import dataclass, field
+
 import pygame
-from bleak import BLEDevice, BleakScanner
+from bleak import BleakScanner, BLEDevice
 
 from src.gamepad_manager import GamepadManager
 from src.mbot_ranger import MbotRanger
+
 
 @dataclass
 class GameManager:
@@ -69,7 +71,9 @@ class GameManager:
     async def _scan_for_devices(self):
         """Scan and return a map of device_name → BLEDevice for all found devices."""
         target_names = set(self.name_id_map.values())
-        print(f"Scanning for {len(target_names)} device(s) ({self.scan_timeout_seconds}s)...")
+        print(
+            f"Scanning for {len(target_names)} device(s) ({self.scan_timeout_seconds}s)..."
+        )
         discovered = await BleakScanner.discover(timeout=self.scan_timeout_seconds)
 
         found: dict[str, BLEDevice] = {}
@@ -89,10 +93,14 @@ class GameManager:
         """Print a discovery report. Returns True if all devices were found."""
         for color, device_name in self.name_id_map.items():
             if color in self.found_devices:
-                print(f"  ✅ {color}: {device_name} ({self.found_devices[color].address})")
+                print(
+                    f"  ✅ {color}: {device_name} ({self.found_devices[color].address})"
+                )
             else:
                 print(f"  ❌ {color}: {device_name} — not found")
-                print("\n❌ Not all robots were found. Please check they are powered on.")
+                print(
+                    "\n❌ Not all robots were found. Please check they are powered on."
+                )
                 pygame.quit()
                 sys.exit(1)
 
@@ -100,7 +108,9 @@ class GameManager:
         """Check that enough controllers are connected. Returns True if sufficient."""
         num_controllers_available = pygame.joystick.get_count()
         if num_controllers_available >= len(self.found_devices):
-            print(f"  ✅ {num_controllers_available} controller(s) detected ({len(self.found_devices)} required)")
+            print(
+                f"  ✅ {num_controllers_available} controller(s) detected ({len(self.found_devices)} required)"
+            )
         else:
             print(
                 f"  ❌ {num_controllers_available} controller(s) detected, but {len(self.found_devices)} required. "
@@ -110,7 +120,9 @@ class GameManager:
 
     def _init_joysticks(self):
         """Initialize all joysticks."""
-        self._joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
+        self._joysticks = [
+            pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())
+        ]
         for j in self._joysticks:
             j.init()
 
@@ -166,6 +178,7 @@ class GameManager:
         if sys.platform != "win32":
             return
         import ctypes
+
         ole32 = ctypes.windll.ole32
         # COINIT_MULTITHREADED = 0x0
         # RPC_E_CHANGED_MODE = 0x80010106 (signed: -2147417850)

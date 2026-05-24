@@ -9,8 +9,3 @@ dependencies = [
     "pygame",
     "rich"
 ]
-
-[dependency-groups]
-dev = [
-    "ruff>=0.15.14",
-]

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-from src.game_manager import GameManager
+
 import asyncio
+
 import pygame
+
+from src.game_manager import GameManager
 
 BUMPERBOTS_NAME_ID_MAP = {
     "Blue": "Makeblock_LE703e97e38098",
@@ -10,6 +13,7 @@ BUMPERBOTS_NAME_ID_MAP = {
     # "Green": "Makeblock_LE003",
     # "Yellow": "Makeblock_LE004",
 }
+
 
 async def main():
     print("=== Bumperbots Multi-Robot Controller ===\n")
