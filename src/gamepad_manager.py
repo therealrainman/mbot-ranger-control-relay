@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 import pygame
-
 from rich.text import Text
 
 from src.mbot_ranger import MbotRanger

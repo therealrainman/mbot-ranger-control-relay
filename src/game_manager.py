@@ -68,7 +68,7 @@ class GameManager:
         print("\n✅ All paired! Connecting to robots...\n")
 
         table = Table(title="mBot Ranger Dashboard")
-        table.add_column("Name", justify="left", style="cyan")
+        table.add_column("Name", justify="left")
         table.add_column("Address", justify="left", style="magenta")
         table.add_column("Axes", justify="left", style="yellow")
         table.add_column("Last Byte Sent", justify="left", style="bold green")
@@ -78,7 +78,7 @@ class GameManager:
             payload_text = Text("-")
             gp_manager.dashboard_row = RobotDashboardRow(axes=axes_text, payload=payload_text)
             table.add_row(
-                gp_manager.ranger.name,
+                Text(gp_manager.ranger.name, style=f"bold {gp_manager.ranger.name.lower()}"),
                 gp_manager.ranger.address,
                 axes_text,
                 payload_text,
