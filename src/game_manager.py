@@ -17,6 +17,13 @@ class GameManager:
 
     found_devices: dict[str, BLEDevice] = field(init=False, repr=False)
     controller_pairings: dict[str, int] = field(init=False, repr=False)
+    _joysticks: list[pygame.joystick.JoystickType] = field(init=False, repr=False)
+
+    @staticmethod
+    def __post_init__():
+        pygame.init()
+        pygame.joystick.init()
+        pygame.display.set_mode((1, 1))
 
     async def run_forever(self):
         # 1. Scan for all robots
@@ -113,11 +120,11 @@ class GameManager:
             )
             sys.exit(1)
 
-    @staticmethod
-    def init_joysticks():
+    def init_joysticks(self):
         """Initialize all joysticks."""
-        for i in range(pygame.joystick.get_count()):
-            pygame.joystick.Joystick(i).init()
+        self._joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
+        for j in self._joysticks:
+            j.init()
 
     async def pair_controllers(self):
         """
