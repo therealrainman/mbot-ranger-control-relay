@@ -19,26 +19,31 @@ class GameManager:
     controller_pairings: dict[str, int] = field(init=False, repr=False)
     _joysticks: list[pygame.joystick.JoystickType] = field(init=False, repr=False)
 
-    @staticmethod
-    def __post_init__():
+    def __post_init__(self):
+        _ = self
         pygame.init()
         pygame.joystick.init()
         pygame.display.set_mode((1, 1))
+        print("Pygame initialized!")
 
-    async def run_forever(self):
+    @property
+    def found_devices_names(self):
+        return list(self.found_devices.keys())
+
+    async def setup(self):
         # 1. Scan for all robots
         print("[ Step 1 / 3 ] Scanning for robots...")
-        await self.scan_for_devices()
-        self.verify_discovery()
+        await self._scan_for_devices()
+        self._verify_discovery()
 
         # 2. Verify enough controllers
         print("\n[ Step 2 / 3 ] Checking controllers...")
-        self.verify_controllers()
+        self._verify_controllers()
 
         # 3. Interactive pairing
         print("\n[ Step 3 / 3 ] Pairing controllers to robots...")
-        self.init_joysticks()
-        await self.pair_controllers()
+        self._init_joysticks()
+        await self._pair_controllers()
 
         # 4. Create GamepadManagers List
         self.gamepad_manager_list = [
@@ -55,17 +60,15 @@ class GameManager:
         for gp_manager in self.gamepad_manager_list:
             gp_manager.connect(self.controller_pairings[gp_manager.ranger.name])
 
-        # 6. Connect all BLE clients and run concurrently
+    async def run_forever(self):
+        # Connect all BLE clients and run concurrently
         print("\n✅ All paired! Connecting to robots...\n")
         async with asyncio.TaskGroup() as tg:
             for gp_manager in self.gamepad_manager_list:
-                tg.create_task(self.run_single_gamepad_manager(gp_manager))
+                tg.create_task(self._run_single_gamepad_manager(gp_manager))
 
-    @property
-    def found_devices_names(self):
-        return list(self.found_devices.keys())
-
-    async def scan_for_devices(self):
+    ### Scan and connect to robots###
+    async def _scan_for_devices(self):
         """Scan and return a map of device_name → BLEDevice for all found devices."""
         target_names = set(self.name_id_map.values())
         print(f"Scanning for {len(target_names)} device(s) ({self.scan_timeout_seconds}s)...")
@@ -97,7 +100,7 @@ class GameManager:
 
         self.found_devices = found
 
-    def verify_discovery(self):
+    def _verify_discovery(self):
         """Print a discovery report. Returns True if all devices were found."""
         for color, device_name in self.name_id_map.items():
             if color in self.found_devices:
@@ -108,7 +111,7 @@ class GameManager:
                 pygame.quit()
                 sys.exit(1)
 
-    def verify_controllers(self):
+    def _verify_controllers(self):
         """Check that enough controllers are connected. Returns True if sufficient."""
         num_controllers_available = pygame.joystick.get_count()
         if num_controllers_available >= len(self.found_devices):
@@ -120,13 +123,13 @@ class GameManager:
             )
             sys.exit(1)
 
-    def init_joysticks(self):
+    def _init_joysticks(self):
         """Initialize all joysticks."""
         self._joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
         for j in self._joysticks:
             j.init()
 
-    async def pair_controllers(self):
+    async def _pair_controllers(self):
         """
         Interactively pair each color robot to a controller.
         Returns a map of color → joystick_index, or None if pairing failed.
@@ -159,8 +162,9 @@ class GameManager:
                 print(f"  ✅ Controller {joystick_index} paired to [{name}]")
                 break
 
+    ### GamepadManager task ###
     @staticmethod
-    async def run_single_gamepad_manager(gamepad_manager_instance: GamepadManager):
+    async def _run_single_gamepad_manager(gamepad_manager_instance: GamepadManager):
         async with gamepad_manager_instance.ranger.relay_client:
             print(f"✅ [{gamepad_manager_instance.ranger.name}] Connected!")
             await gamepad_manager_instance.run()
