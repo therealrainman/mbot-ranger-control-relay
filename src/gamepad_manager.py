@@ -21,7 +21,7 @@ class GamepadManager:
         default=None, init=False, repr=False
     )
     deadzone: float = 0.1
-    refresh_rate: float = 0.0333  # 30Hz
+    polling_interval_sec: float = 0.1  # 10Hz
     controller_joystick: pygame.joystick.JoystickType | None = field(
         default=None, init=False, repr=False
     )
@@ -43,12 +43,12 @@ class GamepadManager:
         throttle = self._apply_deadzone(throttle)
         steering = self._apply_deadzone(steering)
 
-        if throttle < 0:
-            left = (throttle + steering) * 100
-            right = (throttle - steering) * 100
+        if throttle < -0.2:
+            left = (throttle + steering) * 98
+            right = (throttle - steering) * 98
         else:
-            left = (throttle - steering) * 100
-            right = (throttle + steering) * 100
+            left = (throttle - steering) * 98
+            right = (throttle + steering) * 98
 
         return max(-100, min(100, left)), max(-100, min(100, right))
 
@@ -79,7 +79,7 @@ class GamepadManager:
 
                 if self.on_update:
                     self.on_update()
-                await asyncio.sleep(self.refresh_rate)
+                await asyncio.sleep(self.polling_interval_sec)
         except asyncio.CancelledError:
             raise
         finally:
