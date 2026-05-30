@@ -7,9 +7,11 @@ from src.game_manager import GameManager
 
 BUMPERBOTS_NAME_ID_MAP = {
     "Blue": "Makeblock_LE703e97e38098",
-    "Red": "Makeblock_LE10a56269e063",
-    # "Green": "Makeblock_LE003",
-    # "Yellow": "Makeblock_LE004",
+    "Red": "Makeblock_LE703e97e37282",
+    "White": "Makeblock_LE10a56269e54f",
+    "Yellow": "Makeblock_LE703e97e3804c",
+    "Black": "Makeblock_LE10a56269e019",
+    "Pink": "Makeblock_LE703e97e37fff"
 }
 
 
