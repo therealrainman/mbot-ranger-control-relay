@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import asyncio
 
 import pygame
@@ -15,7 +16,15 @@ BUMPERBOTS_NAME_ID_MAP = {
 }
 
 
-async def main():
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Bumperbots Multi-Robot Controller Relay"
+    )
+    # Groundwork for additional command line flags and arguments
+    return parser.parse_args()
+
+
+async def main(args: argparse.Namespace):
     print("=== Bumperbots Multi-Robot Controller ===\n")
 
     game_manager = GameManager(BUMPERBOTS_NAME_ID_MAP)
@@ -25,8 +34,9 @@ async def main():
 
 
 if __name__ == "__main__":
+    args = parse_args()
     try:
-        asyncio.run(main())
+        asyncio.run(main(args))
     except KeyboardInterrupt:
         pass
     finally:
